@@ -29,3 +29,9 @@ class PayoutIn(Input):
  sale_id:int;reference:str=Field(min_length=3,max_length=60)
 class ReasonIn(Input):reason:str=Field(min_length=8,max_length=500)
 class ClockIn(ReasonIn):now:str
+class BatchWindowIn(Input):
+ starts:str;ends:str
+class BatchBuyerIn(Input):
+ profile_id:int;wait_since:str;windows:list[int]=Field(default_factory=list,max_length=12)
+class BatchIn(Input):
+ note:str=Field(default='',max_length=300);windows:list[BatchWindowIn]=Field(min_length=1,max_length=12);buyers:list[BatchBuyerIn]=Field(min_length=1,max_length=40)

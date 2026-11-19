@@ -5,14 +5,14 @@ from .models import *
 from .schemas import *
 from .common import *
 from .security import current,allow
-from . import consignment_service as consignment,fit_service as fit,fitting_service as fitting,sale_service as sale,return_service as returns,settlement_service as settlement
+from . import consignment_service as consignment,fit_service as fit,fitting_service as fitting,sale_service as sale,return_service as returns,settlement_service as settlement,batch_service as batches
 router=APIRouter()
 def change(u,action,fn,supervisor=False):
  allow(u,*(['supervisor'] if supervisor else ['operator','supervisor']))
  with Session() as s:x=fn(s);audit(s,u,action,x);s.commit();return dump(x)
 @router.get('/register')
 def register(u=Depends(current)):
- with Session() as s:return {n:[dump(x) for x in rows(s,c)] for n,c in [('consignors',Consignor),('agreements',Agreement),('amendments',Amendment),('garments',Garment),('measurements',Measurement),('profiles',FitProfile),('assessments',FitAssessment),('fittings',Fitting),('sales',Sale),('returns',Return),('payouts',Payout),('withdrawals',Withdrawal),('clock',Shop)]}
+ with Session() as s:return {n:[dump(x) for x in rows(s,c)] for n,c in [('consignors',Consignor),('agreements',Agreement),('amendments',Amendment),('garments',Garment),('measurements',Measurement),('profiles',FitProfile),('assessments',FitAssessment),('fittings',Fitting),('sales',Sale),('returns',Return),('payouts',Payout),('withdrawals',Withdrawal),('clock',Shop),('batches',FittingBatch),('batch_windows',BatchWindow),('batch_buyers',BatchBuyer),('batch_items',BatchItem)]}
 @router.get('/audit')
 def audits(u=Depends(current)):
  with Session() as s:return [dump(x) for x in rows(s,Audit)]
@@ -52,3 +52,29 @@ def payouts(d:PayoutIn,u=Depends(current)):return change(u,'寄售结算',lambda
 def withdraw(id:int,d:ReasonIn,u=Depends(current)):return change(u,'期满撤回',lambda s:settlement.withdraw(s,id,d.model_dump()),True)
 @router.post('/clock')
 def clock(d:ClockIn,u=Depends(current)):return change(u,'推进演示时钟',lambda s:settlement.clock(s,d.model_dump()),True)
+@router.get('/batches')
+def batch_list(u=Depends(current)):
+ allow(u,'operator','supervisor','viewer')
+ with Session() as s:return [batches.view(s,b) for b in rows(s,FittingBatch)]
+@router.get('/batches/{id}')
+def batch_get(id:int,u=Depends(current)):
+ allow(u,'operator','supervisor','viewer')
+ with Session() as s:return batches.view(s,get(s,FittingBatch,id))
+@router.post('/batches')
+def batch_create(d:BatchIn,u=Depends(current)):
+ allow(u,'operator','supervisor')
+ with Session() as s:
+  v=batches.create(s,d.model_dump(),u['email']);audit(s,u,'周末批量预排',s.get(FittingBatch,v['batch']['id']));s.commit();return v
+@router.post('/batches/{id}/replan')
+def batch_replan(id:int,u=Depends(current)):
+ allow(u,'operator','supervisor')
+ with Session() as s:
+  v=batches.replan(s,id);audit(s,u,'批量重排',s.get(FittingBatch,id));s.commit();return v
+@router.post('/batches/{id}/confirm')
+def batch_confirm(id:int,u=Depends(current)):
+ allow(u,'operator','supervisor')
+ with Session() as s:
+  try:v,err=batches.confirm(s,id)
+  except batches.Replanned as e:
+   audit(s,u,'批量确认遇并发冲突',s.get(FittingBatch,id));s.commit();raise HTTPException(409,e.message)
+  audit(s,u,'批量确认落单',s.get(FittingBatch,id));s.commit();return v

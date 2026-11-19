@@ -1,4 +1,4 @@
-from sqlalchemy import Column,Integer,String,Float,ForeignKey,JSON,CheckConstraint
+from sqlalchemy import Column,Integer,String,Float,ForeignKey,JSON,CheckConstraint,UniqueConstraint
 from .database import Base
 class User(Base):
  __tablename__='users'
@@ -46,3 +46,16 @@ class Withdrawal(Base):
 class Audit(Base):
  __tablename__='audit'
  id=Column(Integer,primary_key=True);actor=Column(String(160),nullable=False);action=Column(String(100),nullable=False);detail=Column(String(500),nullable=False)
+class FittingBatch(Base):
+ __tablename__='fitting_batches'
+ id=Column(Integer,primary_key=True);created_by=Column(String(160),nullable=False);created_at=Column(String(32),nullable=False);note=Column(String(300),default='',nullable=False);state=Column(String(20),default='draft',nullable=False);plan_version=Column(Integer,default=0,nullable=False);confirmed_at=Column(String(32),default='',nullable=False)
+class BatchWindow(Base):
+ __tablename__='batch_windows'
+ id=Column(Integer,primary_key=True);batch_id=Column(Integer,ForeignKey('fitting_batches.id'),nullable=False);starts=Column(String(32),nullable=False);ends=Column(String(32),nullable=False)
+class BatchBuyer(Base):
+ __tablename__='batch_buyers'
+ id=Column(Integer,primary_key=True);batch_id=Column(Integer,ForeignKey('fitting_batches.id'),nullable=False);profile_id=Column(Integer,ForeignKey('profiles.id'),nullable=False);wait_since=Column(String(32),nullable=False);windows=Column(JSON,default=list,nullable=False)
+class BatchItem(Base):
+ __tablename__='batch_items'
+ id=Column(Integer,primary_key=True);batch_id=Column(Integer,ForeignKey('fitting_batches.id'),nullable=False);version=Column(Integer,nullable=False);buyer_id=Column(Integer,ForeignKey('batch_buyers.id'),nullable=False);garment_id=Column(Integer,ForeignKey('garments.id'),nullable=True);window_id=Column(Integer,ForeignKey('batch_windows.id'),nullable=True);slot=Column(Integer,nullable=True);starts=Column(String(32),nullable=True);ends=Column(String(32),nullable=True);fit_label=Column(String(20),default='',nullable=False);fit_probability=Column(Float,default=0,nullable=False);state=Column(String(20),default='unscheduled',nullable=False);reason=Column(String(500),default='',nullable=False);fitting_id=Column(Integer,ForeignKey('fittings.id'),nullable=True)
+ __table_args__=(UniqueConstraint('batch_id','version','buyer_id'),)
